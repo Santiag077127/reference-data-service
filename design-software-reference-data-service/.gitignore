@@ -1,0 +1,9 @@
+bin/
+*.log
+.env
+
+# compiled Go binaries (never commit)
+*.exe
+*.out
+/reference-data-api
+.gocache/
