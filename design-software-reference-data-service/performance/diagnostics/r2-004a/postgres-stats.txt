@@ -1,0 +1,23 @@
+R2-004A POSTGRES STATISTICS
+Captured: 2026-10-19
+Target: ds-reference-clean-postgres-1 / localhost:15436 / design-software-develop
+All observations are read-only. No VACUUM or ANALYZE was run.
+
+pg_stats:
+parameterization.catalog
+- code: n_distinct=-1, null_frac=0, correlation=1
+- id: n_distinct=-1, null_frac=0, correlation=0.99401796
+- is_active: n_distinct=2, null_frac=0, MCV={t,f}, frequencies={0.9001996,0.0998004}, correlation=0.822566
+
+parameterization.catalog_detail
+- catalog_id: n_distinct=1000, null_frac=0, correlation=0.021793487
+- code: n_distinct=-1, null_frac=0, correlation=1
+- display_order: n_distinct=1000, null_frac=0, correlation=0.021793487
+- id: n_distinct=-1, null_frac=0, correlation=1
+- is_active: n_distinct=2, null_frac=0, MCV={t,f}, frequencies={0.8976,0.1024}, correlation=0.8165434
+
+pg_class:
+- catalog: reltuples=1002, relpages=15
+- catalog_detail: reltuples=100000, relpages=1461
+
+Interpretation: statistics are populated and consistent with the observed approximately 90% active distribution. No evidence here of obviously stale or missing statistics. The partial index is therefore not highly selective for the global catalog_detail relation.

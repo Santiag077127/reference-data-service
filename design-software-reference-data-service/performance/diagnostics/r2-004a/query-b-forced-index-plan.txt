@@ -1,0 +1,33 @@
+R2-004A QUERY B FORCED INDEX DIAGNOSTIC
+Captured: 2026-10-19
+Target: ds-reference-clean-postgres-1 / localhost:15436 / design-software-develop
+Method: SET LOCAL enable_seqscan = off inside BEGIN/COMMIT only. No persistent setting changed.
+
+PLAN:
+Incremental Sort  (cost=206.37..4047.78 rows=1795 width=82) (actual time=0.367..3.644 rows=1802 loops=1)
+  Sort Key: c.code, d.display_order, d.code
+  Presorted Key: c.code
+  Full-sort Groups: 18  Sort Method: quicksort  Average Memory: 32kB  Peak Memory: 32kB
+  Pre-sorted Groups: 20  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+  Buffers: shared hit=1864 read=12
+  ->  Nested Loop Left Join  (cost=5.39..3966.72 rows=1795 width=82) (actual time=0.160..2.356 rows=1802 loops=1)
+        Buffers: shared hit=1861 read=12
+        ->  Limit  (cost=0.28..1.54 rows=20 width=54) (actual time=0.021..0.042 rows=20 loops=1)
+              Buffers: shared hit=3
+              ->  Index Scan using uq_catalog_code on catalog c  (cost=0.28..57.30 rows=902 width=54) (actual time=0.020..0.035 rows=20 loops=1)
+                    Filter: is_active
+                    Rows Removed by Filter: 2
+                    Buffers: shared hit=3
+        ->  Bitmap Heap Scan on catalog_detail d  (cost=5.12..197.35 rows=90 width=60) (actual time=0.044..0.095 rows=90 loops=20)
+              Recheck Cond: ((catalog_id = c.id) AND is_active)
+              Heap Blocks: exact=1800
+              Buffers: shared hit=1858 read=12
+              ->  Bitmap Index Scan on ix_catalog_detail_active_catalog_display_order_code  (cost=0.00..5.09 rows=90 width=0) (actual time=0.036..0.036 rows=90 loops=20)
+                    Index Cond: (catalog_id = c.id)
+                    Buffers: shared hit=58 read=12
+Planning:
+  Buffers: shared hit=7
+Planning Time: 0.316 ms
+Execution Time: 3.821 ms
+
+Conclusion: forcing non-sequential scans produces a faster plan in this isolated execution, but it reads 1,876 buffers versus 1,470 for the normal plan and is not a production recommendation. The setting was session-local and was rolled back by COMMIT.

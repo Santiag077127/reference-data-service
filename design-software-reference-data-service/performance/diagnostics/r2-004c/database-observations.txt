@@ -1,0 +1,13 @@
+R2-004C isolated database observations (read-only, post-run)
+
+Target: ds-reference-clean-postgres-1 / design-software-develop / host port 15436.
+
+- max_connections: 100
+- connections for target database: 1 active, 12 idle (Client wait event)
+- active long-running queries excluding the observation query: 0
+- waiting locks: 0
+- no current database-side blocking was observed.
+
+This observation was taken after the official test. It does not prove that
+connection exhaustion or an error did not occur during the test; status-code
+capture and request-time correlation are still required.

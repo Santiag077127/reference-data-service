@@ -1,0 +1,26 @@
+R2-004C application observations
+
+- baseline.js declares 50 VUs and 5 minutes. http_req_failed is the k6
+  built-in expected-response metric; the script additionally marks each query
+  as an error when its response status is not exactly 200.
+- The service has JWT/JWKS validation. A JWKS cache is protected by a read
+  lock and serializes concurrent refreshes; configured TTL is 5 minutes and
+  request timeout is 5 seconds.
+- Protected routes return 401 for invalid/missing tokens, 403 for missing
+  features, and 503 when token validation infrastructure is unavailable.
+- Repository errors in the three read handlers are mapped to HTTP 503.
+- No rate-limiting middleware was found.
+- The HTTP server uses http.ListenAndServe without explicit read, write, idle,
+  or request timeout settings. The database pool uses database/sql defaults:
+  no explicit maximum-open, maximum-idle, or connection-lifetime settings.
+- The local process log covers startup only and does not log request status or
+  repository/JWT errors. It therefore cannot identify the 41,038 failed
+  responses from the official run.
+- Source audit after the sustained diagnostics: a protected read can return
+  HTTP 503 through either (1) JWKS validation returning ErrUnavailable, or
+  (2) a repository error being mapped by the hierarchy handler to
+  DEPENDENCY_UNAVAILABLE. The three tested endpoint handlers all use the
+  latter mapping for query errors.
+- The JWKS client has a five-minute cache TTL, a five-second refresh timeout,
+  and serializes refreshes. The 90-120 and 210-240 second bursts do not align
+  with this TTL. A normally expired JWT returns HTTP 401, not 503.

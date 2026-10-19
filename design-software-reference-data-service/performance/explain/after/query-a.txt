@@ -1,0 +1,40 @@
+R2-004 EXPLAIN AFTER - QUERY A
+Captured: 2026-10-19
+Database target: ds-reference-clean-postgres-1 / localhost:15436 / design-software-develop
+Endpoint: GET /municipalities
+Parameters: department_id=24000000-0000-4000-8000-000000000001, is_active=true, page=1, page_size=20, sort=name:asc
+SQL: Same SQL and parameters as performance/explain/before/query-a.txt.
+
+EXPLAIN (ANALYZE, BUFFERS, SUMMARY) - COUNT
+Aggregate  (cost=548.28..548.29 rows=1 width=8) (actual time=1.547..1.548 rows=1 loops=1)
+  Buffers: shared hit=202
+  ->  Bitmap Heap Scan on municipality  (cost=5.83..547.83 rows=179 width=0) (actual time=1.541..1.542 rows=0 loops=1)
+        Recheck Cond: (department_id = '24000000-0000-4000-8000-000000000001'::uuid)
+        Filter: is_active
+        Rows Removed by Filter: 200
+        Heap Blocks: exact=200
+        Buffers: shared hit=202
+        ->  Bitmap Index Scan on ix_municipality_department_id  (cost=0.00..5.79 rows=199 width=0) (actual time=0.152..0.153 rows=200 loops=1)
+              Index Cond: (department_id = '24000000-0000-4000-8000-000000000001'::uuid)
+              Buffers: shared hit=2
+Planning:
+  Buffers: shared hit=115
+Planning Time: 1.929 ms
+Execution Time: 1.855 ms
+
+EXPLAIN (ANALYZE, BUFFERS, SUMMARY) - PAGE
+Subquery Scan on t  (cost=0.42..85.97 rows=20 width=32) (actual time=0.668..0.670 rows=0 loops=1)
+  Buffers: shared hit=205
+  ->  Limit  (cost=0.42..85.72 rows=20 width=75) (actual time=0.667..0.667 rows=0 loops=1)
+        Buffers: shared hit=205
+        ->  Index Scan using uq_municipality_department_id_name on municipality  (cost=0.42..763.88 rows=179 width=75) (actual time=0.664..0.664 rows=0 loops=1)
+              Index Cond: (department_id = '24000000-0000-4000-8000-000000000001'::uuid)
+              Filter: is_active
+              Rows Removed by Filter: 200
+              Buffers: shared hit=205
+Planning:
+  Buffers: shared hit=25
+Planning Time: 0.638 ms
+Execution Time: 0.719 ms
+
+AFTER observation: Query A uses the same pre-existing indexes. The R2-003 index is not involved.

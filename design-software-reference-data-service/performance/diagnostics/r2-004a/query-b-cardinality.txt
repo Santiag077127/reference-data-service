@@ -1,0 +1,19 @@
+R2-004A QUERY B CARDINALITY
+Captured: 2026-10-19
+Target: ds-reference-clean-postgres-1 / localhost:15436 / design-software-develop
+
+Global counts:
+- active catalogs: 902
+- active catalog_detail: 90000
+- total catalog_detail: 100000
+
+First 20 active catalogs by code:
+- Two functional catalogs have 0 details in this dataset snapshot.
+- The 18 R2 performance catalogs represented in the first 20 each have 100 total and 100 active details.
+- active details belonging to the first 20 active catalogs: 1800
+
+Approximate percentage of all catalog_detail rows belonging to those 20 catalogs:
+- 1800 / 100000 = 1.80% of total details.
+- 1800 / 90000 = 2.00% of active details.
+
+The normal Query B plan scans approximately 90000 active details to return 1802 joined rows. This explains why PostgreSQL can rationally choose a sequential scan: the partial index contains approximately 90% of the table, while the current query shape presents catalog_detail as the outer input to a hash join.
