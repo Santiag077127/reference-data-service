@@ -1,0 +1,22 @@
+R2-002 CURRENT INDEXES BEFORE
+Captured: 2026-10-19
+Database target: ds-reference-clean-postgres-1 / localhost:15436 / design-software-develop
+
+institutional_structure.municipality
+- municipality_pkey: UNIQUE btree (id)
+- ix_municipality_department_id: NON-UNIQUE btree (department_id)
+- uq_municipality_dane_code: UNIQUE btree (dane_code)
+- uq_municipality_department_id_name: UNIQUE btree (department_id, name)
+
+parameterization.catalog
+- catalog_pkey: UNIQUE btree (id)
+- uq_catalog_code: UNIQUE btree (code)
+
+parameterization.catalog_detail
+- catalog_detail_pkey: UNIQUE btree (id)
+- ix_catalog_detail_catalog_id: NON-UNIQUE btree (catalog_id)
+- uq_catalog_detail_catalog_id_code: UNIQUE btree (catalog_id, code)
+
+Dataset IDs confirmed by SELECT:
+- department: 24000000-0000-4000-8000-000000000001
+- catalog: 28000000-0000-4000-8000-000000000001
