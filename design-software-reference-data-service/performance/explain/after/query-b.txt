@@ -1,0 +1,48 @@
+R2-004 EXPLAIN AFTER - QUERY B
+Captured: 2026-10-19
+Database target: ds-reference-clean-postgres-1 / localhost:15436 / design-software-develop
+Endpoint: GET /reports/active-catalog
+Parameters: page=1, page_size=20, catalog_code absent
+SQL: Same SQL and parameters as performance/explain/before/query-b.txt.
+
+EXPLAIN (ANALYZE, BUFFERS, SUMMARY) - COUNT
+Aggregate  (cost=27.27..27.29 rows=1 width=8) (actual time=0.262..0.263 rows=1 loops=1)
+  Buffers: shared hit=15
+  ->  Seq Scan on catalog c  (cost=0.00..25.02 rows=902 width=0) (actual time=0.034..0.221 rows=902 loops=1)
+        Filter: is_active
+        Rows Removed by Filter: 100
+        Buffers: shared hit=15
+Planning:
+  Buffers: shared hit=71
+Planning Time: 0.753 ms
+Execution Time: 0.363 ms
+
+EXPLAIN (ANALYZE, BUFFERS, SUMMARY) - MAIN
+Sort  (cost=2914.56..2919.04 rows=1795 width=82) (actual time=16.666..16.734 rows=1802 loops=1)
+  Sort Key: c.code, d.display_order, d.code
+  Sort Method: quicksort  Memory: 245kB
+  Buffers: shared hit=1470
+  ->  Hash Right Join  (cost=1.99..2817.54 rows=1795 width=82) (actual time=0.051..14.007 rows=1802 loops=1)
+        Hash Cond: (d.catalog_id = c.id)
+        Buffers: shared hit=1464
+        ->  Seq Scan on catalog_detail d  (cost=0.00..2461.00 rows=89760 width=60) (actual time=0.004..8.557 rows=90000 loops=1)
+              Filter: is_active
+              Rows Removed by Filter: 10000
+              Buffers: shared hit=1461
+        ->  Hash  (cost=1.74..1.74 rows=20 width=54) (actual time=0.032..0.035 rows=20 loops=1)
+              Buckets: 1024  Batches: 1  Memory Usage: 10kB
+              Buffers: shared hit=3
+              ->  Subquery Scan on c  (cost=0.28..1.74 rows=20 width=54) (actual time=0.018..0.024 rows=20 loops=1)
+                    Buffers: shared hit=3
+                    ->  Limit  (cost=0.28..1.54 rows=20 width=54) (actual time=0.017..0.021 rows=20 loops=1)
+                          Buffers: shared hit=3
+                          ->  Index Scan using uq_catalog_code on catalog c_1  (cost=0.28..57.30 rows=902 width=54) (actual time=0.016..0.019 rows=20 loops=1)
+                                Filter: is_active
+                                Rows Removed by Filter: 2
+                                Buffers: shared hit=3
+Planning:
+  Buffers: shared hit=257
+Planning Time: 2.018 ms
+Execution Time: 16.903 ms
+
+AFTER observation: Query B does not use ix_catalog_detail_active_catalog_display_order_code. It retains Seq Scan + Hash Right Join + Sort. The lower execution time is observed, but the plan shape and buffer count are unchanged, so the difference must not be attributed solely to the new index.

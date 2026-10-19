@@ -1,0 +1,26 @@
+R2-004A RUNTIME OBSERVATIONS
+Captured: 2026-10-19
+
+Service repository: reference-data-service
+Branch: hu-003-dev
+Service process: listening on localhost:8080 during prior validation.
+Database target: ds-reference-clean-postgres-1 / localhost:15436 / design-software-develop
+
+PostgreSQL:
+- max_connections=100
+- shared_buffers=128MB
+- active user sessions observed: 1
+- idle user sessions observed: 12
+- waiting locks: 0
+- observed user sessions had no lock waits; they were idle in ClientRead.
+
+Container snapshot:
+- ds-reference-clean-postgres-1 CPU: 0.00%
+- memory: 118.5 MiB / 7.601 GiB (1.52%)
+
+Service code:
+- opens database/sql through otelsql.Open.
+- no explicit SetMaxOpenConns, SetMaxIdleConns, or SetConnMaxLifetime calls were found.
+- AMQP and OTEL are optional by environment; no change was made to either.
+
+Interpretation: the point-in-time inspection found no active lock contention, long-running query, connection saturation, or PostgreSQL resource pressure. It cannot prove what workload or runtime state existed during the historical BEFORE and AFTER k6 executions, so environmental variance remains possible but unproven.

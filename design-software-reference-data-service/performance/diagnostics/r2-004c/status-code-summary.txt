@@ -1,0 +1,32 @@
+R2-004C status-code capture
+
+Official acceptance run (2026-10-19): 153,411 HTTP requests; 41,038 failed
+according to k6 http_req_failed (26.75%). The official baseline script records
+only an exact-200 check per endpoint, not a distribution by HTTP status.
+
+No application request-status log was available. Run status-diagnostic.js from
+the PowerShell session that owns the existing K6_* variables to populate the
+following counts. The script does not write credentials, bearer tokens,
+authorization headers, or response bodies.
+
+Status   Count
+200      NOT CAPTURED
+401      NOT CAPTURED
+403      NOT CAPTURED
+429      NOT CAPTURED
+500      NOT CAPTURED
+503      NOT CAPTURED
+other    NOT CAPTURED
+
+Per endpoint counts: NOT CAPTURED
+
+Short diagnostic evidence supplied after this file was created:
+
+- 1 VU / 30 seconds: 0.00% errors; p95 12.34 ms.
+- 10 VUs / 30 seconds: 0.00% errors; p95 20.19 ms.
+- 50 VUs / 30 seconds: 0.00% errors; p95 103.45 ms; 10,298 HTTP 200
+  responses and no non-200 responses; throughput 339.71 requests/s.
+
+This shows that 50 concurrent VUs alone do not reproduce the official
+failure. sustained-status-diagnostic.js is the separate 5-minute diagnostic
+that records status counts by endpoint and 30-second test window.

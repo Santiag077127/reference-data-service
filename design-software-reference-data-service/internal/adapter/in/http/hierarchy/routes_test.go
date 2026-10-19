@@ -3,8 +3,10 @@ package hierarchy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/code-sena/design-software-reference-data-service/internal/adapter/in/http/security"
@@ -95,6 +97,24 @@ func TestCatalogRoutesRequireCatalogFeatureWithoutChangingHierarchyRBAC(t *testi
 	}
 }
 
+func TestRepositoryReadFailureKeepsServiceUnavailableContract(t *testing.T) {
+	mux := http.NewServeMux()
+	queries := application.NewQueryService(failingReportReader{})
+	security.RegisterProtectedRoutes(mux, hierarchyTokenValidator{}, NewHandler(queries).Routes())
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/active-catalog?page=1&page_size=20", nil)
+	req.Header.Set("Authorization", "Bearer catalog-view")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("got HTTP %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	if !strings.Contains(rec.Body.String(), "DEPENDENCY_UNAVAILABLE") {
+		t.Fatalf("unexpected response contract: %s", rec.Body.String())
+	}
+}
+
 type routeReader struct{}
 
 func (routeReader) List(context.Context, application.ListQuery) (application.Page, error) {
@@ -108,6 +128,12 @@ func (routeReader) ListCatalogDetails(context.Context, string, application.ListQ
 }
 func (routeReader) ReportActiveCatalog(context.Context, string, int, int) ([]application.ActiveCatalogReportEntry, int, error) {
 	return []application.ActiveCatalogReportEntry{}, 0, nil
+}
+
+type failingReportReader struct{ routeReader }
+
+func (failingReportReader) ReportActiveCatalog(context.Context, string, int, int) ([]application.ActiveCatalogReportEntry, int, error) {
+	return nil, 0, errors.New("repository unavailable")
 }
 
 type hierarchyTokenValidator struct{}

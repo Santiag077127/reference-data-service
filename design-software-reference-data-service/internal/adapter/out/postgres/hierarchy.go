@@ -45,32 +45,32 @@ func (r *Repository) List(ctx context.Context, query application.ListQuery) (app
 	where, args := where(resource, query.Filters)
 	tx, err := r.readTx(ctx)
 	if err != nil {
-		return application.Page{}, err
+		return application.Page{}, observeRepositoryError("List.read_tx", err)
 	}
 	defer tx.Rollback()
 	var total int
 	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM "+resource.table+where, args...).Scan(&total); err != nil {
-		return application.Page{}, err
+		return application.Page{}, observeRepositoryError("List.count", err)
 	}
 	args = append(args, query.PageSize, (query.Page-1)*query.PageSize)
 	rows, err := tx.QueryContext(ctx, "SELECT row_to_json(t) FROM (SELECT "+resource.columns+" FROM "+resource.table+where+" ORDER BY "+query.Sort+" LIMIT $"+strconv.Itoa(len(args)-1)+" OFFSET $"+strconv.Itoa(len(args))+") t", args...)
 	if err != nil {
-		return application.Page{}, err
+		return application.Page{}, observeRepositoryError("List.page", err)
 	}
 	defer rows.Close()
 	data := make([]json.RawMessage, 0)
 	for rows.Next() {
 		var item json.RawMessage
 		if err = rows.Scan(&item); err != nil {
-			return application.Page{}, err
+			return application.Page{}, observeRepositoryError("List.scan", err)
 		}
 		data = append(data, item)
 	}
 	if err = rows.Err(); err != nil {
-		return application.Page{}, err
+		return application.Page{}, observeRepositoryError("List.rows", err)
 	}
 	if err = tx.Commit(); err != nil {
-		return application.Page{}, err
+		return application.Page{}, observeRepositoryError("List.commit", err)
 	}
 	return application.Page{Data: data, TotalItems: total}, nil
 }
@@ -115,7 +115,7 @@ func (r *Repository) ListCatalogDetails(ctx context.Context, catalogID string, q
 func (r *Repository) ReportActiveCatalog(ctx context.Context, catalogCode string, page, pageSize int) ([]application.ActiveCatalogReportEntry, int, error) {
 	tx, err := r.readTx(ctx)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, observeRepositoryError("ReportActiveCatalog.read_tx", err)
 	}
 	defer tx.Rollback()
 	filters := ""
@@ -132,7 +132,7 @@ func (r *Repository) ReportActiveCatalog(ctx context.Context, catalogCode string
 		countArgs = append(countArgs, catalogCode)
 	}
 	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM parameterization.catalog c"+countWhere, countArgs...).Scan(&total); err != nil {
-		return nil, 0, err
+		return nil, 0, observeRepositoryError("ReportActiveCatalog.count", err)
 	}
 	rows, err := tx.QueryContext(ctx, `
 		WITH paged_catalogs AS (
@@ -144,11 +144,15 @@ func (r *Repository) ReportActiveCatalog(ctx context.Context, catalogCode string
 		)
 		SELECT c.code, c.name, d.code, d.label, d.display_order
 		FROM paged_catalogs c
-		LEFT JOIN parameterization.catalog_detail d
-			ON d.catalog_id = c.id AND d.is_active = true
+		LEFT JOIN LATERAL (
+			SELECT d.code, d.label, d.display_order
+			FROM parameterization.catalog_detail d
+			WHERE d.catalog_id = c.id AND d.is_active = true
+			ORDER BY d.display_order ASC NULLS LAST, d.code ASC
+		) d ON true
 		ORDER BY c.code ASC, d.display_order ASC NULLS LAST, d.code ASC`, args...)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, observeRepositoryError("ReportActiveCatalog.page", err)
 	}
 	defer rows.Close()
 	entries := make([]application.ActiveCatalogReportEntry, 0)
@@ -158,7 +162,7 @@ func (r *Repository) ReportActiveCatalog(ctx context.Context, catalogCode string
 		var detailCode, detailLabel sql.NullString
 		var displayOrder sql.NullInt64
 		if err := rows.Scan(&catalogCode, &catalogName, &detailCode, &detailLabel, &displayOrder); err != nil {
-			return nil, 0, err
+			return nil, 0, observeRepositoryError("ReportActiveCatalog.scan", err)
 		}
 		index, ok := byCode[catalogCode]
 		if !ok {
@@ -176,10 +180,10 @@ func (r *Repository) ReportActiveCatalog(ctx context.Context, catalogCode string
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, 0, observeRepositoryError("ReportActiveCatalog.rows", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, 0, err
+		return nil, 0, observeRepositoryError("ReportActiveCatalog.commit", err)
 	}
 	return entries, total, nil
 }
@@ -187,15 +191,15 @@ func (r *Repository) ReportActiveCatalog(ctx context.Context, catalogCode string
 func (r *Repository) catalogExists(ctx context.Context, id string) (bool, error) {
 	tx, err := r.readTx(ctx)
 	if err != nil {
-		return false, err
+		return false, observeRepositoryError("catalogExists.read_tx", err)
 	}
 	defer tx.Rollback()
 	var exists bool
 	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM parameterization.catalog WHERE id = $1)", id).Scan(&exists); err != nil {
-		return false, err
+		return false, observeRepositoryError("catalogExists.query", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return false, err
+		return false, observeRepositoryError("catalogExists.commit", err)
 	}
 	if !exists {
 		return false, application.ErrNotFound
@@ -206,32 +210,32 @@ func (r *Repository) catalogExists(ctx context.Context, id string) (bool, error)
 func (r *Repository) listQuery(ctx context.Context, table, columns, whereClause string, args []any, query application.ListQuery) (application.Page, error) {
 	tx, err := r.readTx(ctx)
 	if err != nil {
-		return application.Page{}, err
+		return application.Page{}, observeRepositoryError("listQuery.read_tx", err)
 	}
 	defer tx.Rollback()
 	var total int
 	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM "+table+whereClause, args...).Scan(&total); err != nil {
-		return application.Page{}, err
+		return application.Page{}, observeRepositoryError("listQuery.count", err)
 	}
 	args = append(args, query.PageSize, (query.Page-1)*query.PageSize)
 	rows, err := tx.QueryContext(ctx, "SELECT row_to_json(t) FROM (SELECT "+columns+" FROM "+table+whereClause+" ORDER BY "+query.Sort+" LIMIT $"+strconv.Itoa(len(args)-1)+" OFFSET $"+strconv.Itoa(len(args))+") t", args...)
 	if err != nil {
-		return application.Page{}, err
+		return application.Page{}, observeRepositoryError("listQuery.page", err)
 	}
 	defer rows.Close()
 	data := make([]json.RawMessage, 0)
 	for rows.Next() {
 		var item json.RawMessage
 		if err := rows.Scan(&item); err != nil {
-			return application.Page{}, err
+			return application.Page{}, observeRepositoryError("listQuery.scan", err)
 		}
 		data = append(data, item)
 	}
 	if err := rows.Err(); err != nil {
-		return application.Page{}, err
+		return application.Page{}, observeRepositoryError("listQuery.rows", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return application.Page{}, err
+		return application.Page{}, observeRepositoryError("listQuery.commit", err)
 	}
 	return application.Page{Data: data, TotalItems: total}, nil
 }

@@ -111,14 +111,20 @@ func TestCatalogReadIntegration(t *testing.T) {
 		Data []struct {
 			CatalogCode string `json:"catalog_code"`
 			Details     []struct {
-				Code string `json:"code"`
+				Code         string `json:"code"`
+				DisplayOrder *int   `json:"display_order"`
 			} `json:"details"`
 		} `json:"data"`
+		Pagination struct {
+			Page       int `json:"page"`
+			PageSize   int `json:"page_size"`
+			TotalItems int `json:"total_items"`
+		} `json:"pagination"`
 	}
 	if err := json.NewDecoder(report.Body).Decode(&reportResponse); err != nil {
 		t.Fatal(err)
 	}
-	var foundActive, foundActiveDetail, foundInactive bool
+	var foundActive, foundActiveDetail, foundInactive, foundNoActiveDetails bool
 	for _, entry := range reportResponse.Data {
 		var active bool
 		if err := db.QueryRow(`SELECT is_active FROM parameterization.catalog WHERE code = $1`, entry.CatalogCode).Scan(&active); err != nil {
@@ -129,6 +135,9 @@ func TestCatalogReadIntegration(t *testing.T) {
 		}
 		if entry.CatalogCode == fixtures.activeCode {
 			foundActive = true
+			if len(entry.Details) != 2 || entry.Details[0].Code != fixtures.activeDetailCode || entry.Details[1].Code != fixtures.secondActiveDetailCode || entry.Details[0].DisplayOrder == nil || entry.Details[1].DisplayOrder == nil || *entry.Details[0].DisplayOrder != 1 || *entry.Details[1].DisplayOrder != 2 {
+				t.Fatalf("active catalog detail ordering changed: %+v", entry.Details)
+			}
 			for _, detail := range entry.Details {
 				if detail.Code == fixtures.activeDetailCode {
 					foundActiveDetail = true
@@ -141,9 +150,15 @@ func TestCatalogReadIntegration(t *testing.T) {
 		if entry.CatalogCode == fixtures.inactiveCode {
 			foundInactive = true
 		}
+		if entry.CatalogCode == fixtures.noActiveDetailsCode {
+			foundNoActiveDetails = true
+			if len(entry.Details) != 0 {
+				t.Fatalf("catalog without active details was not preserved: %+v", entry)
+			}
+		}
 	}
-	if !foundActive || !foundActiveDetail || foundInactive {
-		t.Fatalf("report active filtering is incorrect: active=%t active_detail=%t inactive=%t", foundActive, foundActiveDetail, foundInactive)
+	if !foundActive || !foundActiveDetail || foundInactive || !foundNoActiveDetails || reportResponse.Pagination.Page != 1 || reportResponse.Pagination.PageSize != 20 || reportResponse.Pagination.TotalItems < 2 {
+		t.Fatalf("report semantics are incorrect: active=%t active_detail=%t inactive=%t no_active_details=%t pagination=%+v", foundActive, foundActiveDetail, foundInactive, foundNoActiveDetails, reportResponse.Pagination)
 	}
 	filteredReport := get("/reports/active-catalog?catalog_code=" + url.QueryEscape(catalogCode))
 	if filteredReport.Code != http.StatusOK {
@@ -163,13 +178,16 @@ func TestCatalogReadIntegration(t *testing.T) {
 }
 
 type catalogFixtures struct {
-	activeCode         string
-	inactiveCode       string
-	activeDetailCode   string
-	inactiveDetailCode string
-	activeID           string
-	inactiveID         string
-	db                 *sql.DB
+	activeCode             string
+	inactiveCode           string
+	noActiveDetailsCode    string
+	activeDetailCode       string
+	secondActiveDetailCode string
+	inactiveDetailCode     string
+	activeID               string
+	inactiveID             string
+	noActiveDetailsID      string
+	db                     *sql.DB
 }
 
 func createCatalogFixtures(t *testing.T, db *sql.DB) catalogFixtures {
@@ -180,7 +198,9 @@ func createCatalogFixtures(t *testing.T, db *sql.DB) catalogFixtures {
 	}
 	activeCode := "IT005A" + stamp[:12]
 	inactiveCode := "IT005I" + stamp[4:12]
+	noActiveDetailsCode := "IT005N" + stamp[2:14]
 	activeDetailCode := "ACTIVE_" + stamp[:8]
+	secondActiveDetailCode := "ACTIVE_SECOND_" + stamp[4:12]
 	inactiveDetailCode := "INACTIVE_" + stamp[8:16]
 	tx, err := db.BeginTx(context.Background(), nil)
 	if err != nil {
@@ -190,7 +210,7 @@ func createCatalogFixtures(t *testing.T, db *sql.DB) catalogFixtures {
 		tx.Rollback()
 		t.Fatalf("set fixture role: %v", err)
 	}
-	var activeID, inactiveID string
+	var activeID, inactiveID, noActiveDetailsID string
 	if err := tx.QueryRowContext(context.Background(), `INSERT INTO parameterization.catalog (code, name, description, is_active) VALUES ($1, 'HU-REF-005 activo', 'fixture de integration test', true) RETURNING id`, activeCode).Scan(&activeID); err != nil {
 		tx.Rollback()
 		t.Fatalf("insert active catalog: %v", err)
@@ -199,16 +219,26 @@ func createCatalogFixtures(t *testing.T, db *sql.DB) catalogFixtures {
 		tx.Rollback()
 		t.Fatalf("insert inactive catalog: %v", err)
 	}
+	if err := tx.QueryRowContext(context.Background(), `INSERT INTO parameterization.catalog (code, name, description, is_active) VALUES ($1, 'HU-REF-005 sin detalles activos', 'fixture de integration test', true) RETURNING id`, noActiveDetailsCode).Scan(&noActiveDetailsID); err != nil {
+		tx.Rollback()
+		t.Fatalf("insert active catalog without details: %v", err)
+	}
 	for _, detail := range []struct {
 		catalogID string
 		code      string
 		active    bool
 	}{
 		{activeID, activeDetailCode, true},
+		{activeID, secondActiveDetailCode, true},
 		{activeID, inactiveDetailCode, false},
 		{inactiveID, "INACTIVE_PARENT_" + stamp, false},
+		{noActiveDetailsID, "INACTIVE_ONLY_" + stamp, false},
 	} {
-		if _, err := tx.ExecContext(context.Background(), `INSERT INTO parameterization.catalog_detail (catalog_id, code, label, display_order, is_active) VALUES ($1, $2, $3, $4, $5)`, detail.catalogID, detail.code, detail.code, 1, detail.active); err != nil {
+		displayOrder := 1
+		if detail.code == secondActiveDetailCode {
+			displayOrder = 2
+		}
+		if _, err := tx.ExecContext(context.Background(), `INSERT INTO parameterization.catalog_detail (catalog_id, code, label, display_order, is_active) VALUES ($1, $2, $3, $4, $5)`, detail.catalogID, detail.code, detail.code, displayOrder, detail.active); err != nil {
 			tx.Rollback()
 			t.Fatalf("insert catalog detail: %v", err)
 		}
@@ -216,7 +246,7 @@ func createCatalogFixtures(t *testing.T, db *sql.DB) catalogFixtures {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	return catalogFixtures{activeCode: activeCode, inactiveCode: inactiveCode, activeDetailCode: activeDetailCode, inactiveDetailCode: inactiveDetailCode, activeID: activeID, inactiveID: inactiveID, db: db}
+	return catalogFixtures{activeCode: activeCode, inactiveCode: inactiveCode, noActiveDetailsCode: noActiveDetailsCode, activeDetailCode: activeDetailCode, secondActiveDetailCode: secondActiveDetailCode, inactiveDetailCode: inactiveDetailCode, activeID: activeID, inactiveID: inactiveID, noActiveDetailsID: noActiveDetailsID, db: db}
 }
 
 func (f catalogFixtures) cleanup() {
@@ -228,7 +258,7 @@ func (f catalogFixtures) cleanup() {
 		tx.Rollback()
 		return
 	}
-	_, _ = tx.ExecContext(context.Background(), "DELETE FROM parameterization.catalog_detail WHERE catalog_id IN ($1, $2)", f.activeID, f.inactiveID)
-	_, _ = tx.ExecContext(context.Background(), "DELETE FROM parameterization.catalog WHERE id IN ($1, $2)", f.activeID, f.inactiveID)
+	_, _ = tx.ExecContext(context.Background(), "DELETE FROM parameterization.catalog_detail WHERE catalog_id IN ($1, $2, $3)", f.activeID, f.inactiveID, f.noActiveDetailsID)
+	_, _ = tx.ExecContext(context.Background(), "DELETE FROM parameterization.catalog WHERE id IN ($1, $2, $3)", f.activeID, f.inactiveID, f.noActiveDetailsID)
 	_ = tx.Commit()
 }

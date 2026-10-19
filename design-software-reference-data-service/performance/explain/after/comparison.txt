@@ -1,0 +1,48 @@
+R2-004 SQL BEFORE/AFTER COMPARISON
+Captured: 2026-10-19
+
+The comparisons below are statement-level measurements from separate EXPLAIN (ANALYZE, BUFFERS) executions. They are not k6 endpoint measurements.
+
+Query A - COUNT
+BEFORE execution: 2.159 ms; AFTER execution: 1.855 ms
+Difference: 0.304 ms
+Calculated change: 14.08% lower
+Plan/index: Bitmap Heap Scan using ix_municipality_department_id in both.
+
+Query A - PAGE
+BEFORE execution: 0.194 ms; AFTER execution: 0.719 ms
+Difference: -0.525 ms
+Calculated change: -270.62% (higher in this execution)
+Plan/index: Index Scan using uq_municipality_department_id_name in both.
+
+Query B - COUNT
+BEFORE execution: 0.389 ms; AFTER execution: 0.363 ms
+Difference: 0.026 ms
+Calculated change: 6.68% lower
+Plan: Seq Scan on catalog in both.
+
+Query B - MAIN CTE/JOIN
+BEFORE execution: 23.066 ms; AFTER execution: 16.903 ms
+Difference: 6.163 ms
+Calculated change: 26.72% lower
+Plan: Seq Scan on catalog_detail + Hash Right Join + Sort in both. The new index was not selected.
+
+Query C - EXISTS
+BEFORE execution: 0.077 ms; AFTER execution: 0.139 ms
+Difference: -0.062 ms
+Calculated change: -80.52% (higher in this execution)
+Plan: Index Only Scan using catalog_pkey in both.
+
+Query C - COUNT
+BEFORE execution: 0.355 ms; AFTER execution: 0.205 ms
+Difference: 0.150 ms
+Calculated change: 42.25% lower
+Plan: BEFORE used ix_catalog_detail_catalog_id; AFTER used ix_catalog_detail_active_catalog_display_order_code.
+
+Query C - PAGE
+BEFORE execution: 0.183 ms; AFTER execution: 0.047 ms
+Difference: 0.136 ms
+Calculated change: 74.32% lower
+Plan: BEFORE Bitmap Heap Scan + Sort; AFTER Index Scan using ix_catalog_detail_active_catalog_display_order_code without a Sort node.
+
+Conclusion: the SQL evidence demonstrates a plan improvement for Query C. Query B's single execution was faster but its plan and buffers were unchanged, so this evidence alone does not prove that the new index caused the Query B time reduction.

@@ -1,0 +1,10 @@
+R2-004 CURRENT INDEXES AFTER
+Captured: 2026-10-19
+Database target: ds-reference-clean-postgres-1 / localhost:15436 / design-software-develop
+
+Index confirmed:
+ix_catalog_detail_active_catalog_display_order_code
+ON parameterization.catalog_detail (catalog_id, display_order, code)
+WHERE is_active = true
+
+The index is present in PostgreSQL and is used by Query C COUNT and page plans. Query B's plan does not use it.

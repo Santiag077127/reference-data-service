@@ -1,0 +1,30 @@
+R2-004B QUERY B COMPARISON
+Captured: 2026-10-19
+Target: ds-reference-clean-postgres-1 / localhost:15436 / design-software-develop
+
+R2-004A current production shape:
+- Execution Time: 24.806 ms
+- Buffers: shared hit=1470
+- Plan: Seq Scan on catalog_detail, Hash Right Join, Sort
+- Index R2-003: not used
+
+R2-004B optimized production shape:
+- Execution Time: 4.417 ms
+- Buffers: shared hit=1882
+- Plan: Bitmap Index Scan on ix_catalog_detail_active_catalog_display_order_code, Bitmap Heap Scan, Nested Loop Left Join, Incremental Sort
+- Index R2-003: used
+
+Execution difference: 20.389 ms lower
+Execution improvement: 82.19% lower
+
+Semantic-equivalence SQL comparison:
+- old_minus_new: 0 rows
+- new_minus_old: 0 rows
+- ordered_old_minus_new: 0 rows
+- ordered_new_minus_old: 0 rows
+
+The comparison uses the same first 20 active catalogs, active-detail predicate, selected fields, LEFT JOIN behavior, and final ordering. It confirms equivalent rows and ordering for the R2 dataset snapshot.
+
+Count semantics are unchanged by the repository implementation: COUNT remains parameterization.catalog WHERE is_active=true, with the existing optional catalog_code filter. The R2 dataset has 902 active catalogs; an example catalog_code filter for R2CAT000002 yields 1 catalog.
+
+Important: buffer count is higher with the index-driven plan because 20 per-catalog heap lookups are performed. The measured execution time is nevertheless lower in this isolated EXPLAIN execution. Final acceptance still requires the unchanged official k6 workload.

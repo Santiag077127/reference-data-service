@@ -1,0 +1,31 @@
+R2-004C sustained diagnostic observations (operator-supplied evidence)
+
+Run 1, 50 VUs / 5 minutes:
+- HTTP 200: 107,546
+- HTTP 503: 34,699
+- error rate: 24.39%
+- p95: 218.98 ms
+- throughput: 473.64 requests/s
+
+Run 2, 50 VUs / 5 minutes:
+- HTTP 200: 108,467
+- HTTP 503: 36,253
+- error rate: 25.05%
+- p95: 212.75 ms
+- throughput: 481.87 requests/s
+
+Run 2 time pattern across Query A, Query B, and Query C:
+- 000-090 seconds: no HTTP 503 observed.
+- 090-120 seconds: large HTTP 503 burst.
+- 120-180 seconds: recovery.
+- 180-210 seconds: no HTTP 503 observed.
+- 210-240 seconds: another large HTTP 503 burst.
+- 240-300 seconds: recovery.
+
+Interpretation:
+- The failure reproduces under sustained load and is not caused by 50 VUs
+  alone: the earlier 50 VU / 30 second diagnostic had 10,298 HTTP 200
+  responses and no non-200 responses.
+- The shared, periodic burst-and-recovery pattern rules out a Query B-only
+  cause. It is consistent with a shared dependency path, but the underlying
+  dependency error was not logged and therefore is not identified here.

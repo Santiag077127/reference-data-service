@@ -1,0 +1,48 @@
+R2-004A QUERY B CURRENT PLAN
+Captured: 2026-10-19
+Target: ds-reference-clean-postgres-1 / localhost:15436 / design-software-develop
+Endpoint: GET /reports/active-catalog?page=1&page_size=20
+
+SQL:
+WITH paged_catalogs AS (
+  SELECT c.id, c.code, c.name
+  FROM parameterization.catalog c
+  WHERE c.is_active = true
+  ORDER BY c.code ASC
+  LIMIT 20 OFFSET 0
+)
+SELECT c.code, c.name, d.code, d.label, d.display_order
+FROM paged_catalogs c
+LEFT JOIN parameterization.catalog_detail d
+  ON d.catalog_id = c.id AND d.is_active = true
+ORDER BY c.code ASC, d.display_order ASC NULLS LAST, d.code ASC;
+
+NORMAL PLAN:
+Sort  (cost=2914.56..2919.04 rows=1795 width=82) (actual time=24.470..24.567 rows=1802 loops=1)
+  Sort Key: c.code, d.display_order, d.code
+  Sort Method: quicksort  Memory: 245kB
+  Buffers: shared hit=1470
+  ->  Hash Right Join  (cost=1.99..2817.54 rows=1795 width=82) (actual time=0.075..20.709 rows=1802 loops=1)
+        Hash Cond: (d.catalog_id = c.id)
+        Buffers: shared hit=1464
+        ->  Seq Scan on catalog_detail d  (cost=0.00..2461.00 rows=89760 width=60) (actual time=0.003..12.967 rows=90000 loops=1)
+              Filter: is_active
+              Rows Removed by Filter: 10000
+              Buffers: shared hit=1461
+        ->  Hash  (cost=1.74..1.74 rows=20 width=54) (actual time=0.044..0.047 rows=20 loops=1)
+              Buckets: 1024  Batches: 1  Memory Usage: 10kB
+              Buffers: shared hit=3
+              ->  Subquery Scan on c  (cost=0.28..1.74 rows=20 width=54) (actual time=0.030..0.037 rows=20 loops=1)
+                    Buffers: shared hit=3
+                    ->  Limit  (cost=0.28..1.54 rows=20 width=54) (actual time=0.029..0.034 rows=20 loops=1)
+                          Buffers: shared hit=3
+                          ->  Index Scan using uq_catalog_code on catalog c_1  (cost=0.28..57.30 rows=902 width=54) (actual time=0.027..0.030 rows=20 loops=1)
+                                Filter: is_active
+                                Rows Removed by Filter: 2
+                                Buffers: shared hit=3
+Planning:
+  Buffers: shared hit=328
+Planning Time: 1.984 ms
+Execution Time: 24.806 ms
+
+Index ix_catalog_detail_active_catalog_display_order_code: NOT USED.

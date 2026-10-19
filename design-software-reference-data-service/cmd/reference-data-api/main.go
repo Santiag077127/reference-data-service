@@ -21,6 +21,24 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+type databasePoolConfig struct {
+	maxOpenConns    int
+	maxIdleConns    int
+	maxConnLifetime time.Duration
+	maxConnIdleTime time.Duration
+}
+
+// defaultDatabasePoolConfig reserves database capacity for non-service users
+// while avoiding unbounded physical connection growth during concurrent reads.
+// Its lifetime exceeds the R2 five-minute measurement window so it does not
+// intentionally recycle connections during that diagnostic.
+var defaultDatabasePoolConfig = databasePoolConfig{
+	maxOpenConns:    40,
+	maxIdleConns:    10,
+	maxConnLifetime: 30 * time.Minute,
+	maxConnIdleTime: 5 * time.Minute,
+}
+
 func main() {
 	shutdownTelemetry, err := observability.Setup(context.Background())
 	if err != nil {
@@ -43,6 +61,9 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+	poolStatsContext, stopPoolStats := context.WithCancel(context.Background())
+	defer stopPoolStats()
+	postgres.StartPoolStatsLogger(poolStatsContext, db, 5*time.Second)
 	healthHandler = health.NewHandler(db, 2*time.Second)
 	mux.HandleFunc("GET /health/ready", healthHandler.Ready)
 	repository := postgres.NewRepository(db)
@@ -93,11 +114,19 @@ func databaseFromEnvironment() (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	configureDatabasePool(db, defaultDatabasePoolConfig)
 	if err = db.Ping(); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return db, nil
+}
+
+func configureDatabasePool(db *sql.DB, config databasePoolConfig) {
+	db.SetMaxOpenConns(config.maxOpenConns)
+	db.SetMaxIdleConns(config.maxIdleConns)
+	db.SetConnMaxLifetime(config.maxConnLifetime)
+	db.SetConnMaxIdleTime(config.maxConnIdleTime)
 }
 
 func registerRoutes(mux *http.ServeMux, validator security.TokenValidator, hierarchyHandler *hierarchy.Handler) {
